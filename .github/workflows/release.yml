@@ -1,9 +1,8 @@
 name: Release Windows Application
 
 on:
-  push:
-    tags:
-      - 'v*'  # vで始まるタグ（例: v1.0.0）
+  release:
+    types: [published]  # GitHubでリリースが公開されたときにトリガー
 
 jobs:
   release:
@@ -24,3 +23,10 @@ jobs:
       
     - name: Build Windows application
       run: npm run build:win
+      
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
