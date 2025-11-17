@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POTA Notification - 通知設定</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .field-section {
+      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #fafafa;
+    }
+
+    .field-section h2 {
+      margin-bottom: 15px;
+      color: #555;
+      font-size: 18px;
+    }
+
+    .operator-select {
+      margin-bottom: 15px;
+    }
+
+    .operator-select label {
+      display: inline-block;
+      margin-right: 15px;
+      font-weight: 500;
+    }
+
+    .operator-select input[type="radio"] {
+      margin-right: 5px;
+    }
+
+    .conditions-list {
+      margin-top: 15px;
+    }
+
+    .condition-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .condition-item input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .condition-item select {
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .condition-item input[type="checkbox"] {
+      margin-left: 10px;
+    }
+
+    .condition-item > label:first-child input[type="checkbox"] {
+      margin-left: 0;
+    }
+
+    .condition-item label {
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .btn-remove {
+      padding: 6px 12px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .btn-remove:hover {
+      background: #c82333;
+    }
+
+    .btn-add {
+      padding: 8px 16px;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .btn-add:hover {
+      background: #218838;
+    }
+
+    .btn-test {
+      padding: 8px 16px;
+      background: #17a2b8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .btn-test:hover {
+      background: #138496;
+    }
+
+    .buttons {
+      margin-top: 30px;
+      text-align: right;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+    }
+
+    .btn-save, .btn-cancel {
+      padding: 10px 20px;
+      margin-left: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-save {
+      background: #007bff;
+      color: white;
+    }
+
+    .btn-save:hover {
+      background: #0056b3;
+    }
+
+    .btn-cancel {
+      background: #6c757d;
+      color: white;
+    }
+
+    .btn-cancel:hover {
+      background: #5a6268;
+    }
+
+    .empty-message {
+      color: #999;
+      font-style: italic;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>POTA Notification - 通知設定</h1>
+
+    <!-- Reference フィールド -->
+    <div class="field-section" data-field="reference">
+      <h2>Reference フィルタ</h2>
+      <div class="operator-select">
+        <label>条件の結合方法:</label>
+        <label><input type="radio" name="reference-operator" value="or" checked> OR (いずれか一致)</label>
+        <label><input type="radio" name="reference-operator" value="and"> AND (全て一致)</label>
+      </div>
+      <div class="conditions-list" id="reference-conditions"></div>
+      <button class="btn-add" onclick="addCondition('reference')">条件を追加</button>
+    </div>
+
+    <!-- Comments フィールド -->
+    <div class="field-section" data-field="comments">
+      <h2>Comments フィルタ</h2>
+      <div class="operator-select">
+        <label>条件の結合方法:</label>
+        <label><input type="radio" name="comments-operator" value="or" checked> OR (いずれか一致)</label>
+        <label><input type="radio" name="comments-operator" value="and"> AND (全て一致)</label>
+      </div>
+      <div class="conditions-list" id="comments-conditions"></div>
+      <button class="btn-add" onclick="addCondition('comments')">条件を追加</button>
+    </div>
+
+    <!-- Mode フィールド -->
+    <div class="field-section" data-field="mode">
+      <h2>Mode フィルタ</h2>
+      <div class="operator-select">
+        <label>条件の結合方法:</label>
+        <label><input type="radio" name="mode-operator" value="or" checked> OR (いずれか一致)</label>
+        <label><input type="radio" name="mode-operator" value="and"> AND (全て一致)</label>
+      </div>
+      <div class="conditions-list" id="mode-conditions"></div>
+      <button class="btn-add" onclick="addCondition('mode')">条件を追加</button>
+    </div>
+
+    <!-- Frequency フィールド -->
+    <div class="field-section" data-field="frequency">
+      <h2>Frequency フィルタ</h2>
+      <div class="operator-select">
+        <label>条件の結合方法:</label>
+        <label><input type="radio" name="frequency-operator" value="or" checked> OR (いずれか一致)</label>
+        <label><input type="radio" name="frequency-operator" value="and"> AND (全て一致)</label>
+      </div>
+      <div class="conditions-list" id="frequency-conditions"></div>
+      <button class="btn-add" onclick="addCondition('frequency')">条件を追加</button>
+    </div>
+
+    <!-- その他のオプション -->
+    <div class="field-section">
+      <h2>その他のオプション</h2>
+      <div style="padding: 10px;">
+        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px;">
+          <input 
+            type="checkbox" 
+            id="ignore-other-spotters"
+            onchange="updateIgnoreOtherSpotters(this.checked)"
+          />
+          <span>他人のspotterは通知しない（activatorとspotterが一致しない場合は通知しません）</span>
+        </label>
+        <p style="margin-top: 8px; font-size: 12px; color: #666;">
+          コールサインの比較は大文字小文字を区別せず、スラッシュ以降の文字（例: /P, /MM）は無視されます。
+        </p>
+      </div>
+    </div>
+
+    <!-- 通知音設定 -->
+    <div class="field-section">
+      <h2>通知音設定</h2>
+      <div style="padding: 10px;">
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500;">
+            通知音ファイル:
+          </label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input 
+              type="text" 
+              id="notification-sound-path"
+              readonly
+              style="flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background-color: #f9f9f9;"
+              placeholder=""
+            />
+            <button 
+              class="btn-add" 
+              onclick="selectNotificationSound()"
+              style="margin-top: 0;"
+            >
+              ファイルを選択
+            </button>
+            <button 
+              class="btn-remove" 
+              onclick="clearNotificationSound()"
+              style="margin-top: 0;"
+            >
+              クリア
+            </button>
+          </div>
+          <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
+            <button 
+              class="btn-test" 
+              onclick="testNotificationSound()"
+              style="margin-top: 0;"
+            >
+              テスト再生
+            </button>
+            <span style="font-size: 12px; color: #666;">
+              音量にご注意ください。
+            </span>
+          </div>
+          <p style="margin-top: 8px; font-size: 12px; color: #666;">
+            音声ファイル（.wav, .mp3, .ogg等）を選択できます。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-save" onclick="saveSettings()">保存</button>
+      <button class="btn-cancel" onclick="closeSettings()">キャンセル</button>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
+
