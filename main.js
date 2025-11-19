@@ -2,19 +2,30 @@ const { app, BrowserWindow, Notification, ipcMain, session, Menu, dialog } = req
 const path = require('path');
 const fs = require('fs').promises;
 const { applyFilter } = require('./filter');
+const {
+  loadVoicevoxSettings,
+  saveVoicevoxSettings,
+  getVoicevoxSpeakers,
+  synthesizeVoicevox,
+  speakWithVoicevox,
+  generateVoicevoxText
+} = require('./voicevox');
 
 let mainWindow;
 let settingsWindow;
+let voicevoxSettingsWindow;
 let filterConfig = null;
 let notificationSettings = {
   notificationEnabled: false,
   popupEnabled: false,
-  soundEnabled: false
+  soundEnabled: false,
+  voicevoxEnabled: false
 };
 let knownSpotIds = new Set(); // 既知のスポットIDを保持
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const NOTIFICATION_SETTINGS_FILE = path.join(app.getPath('userData'), 'notification-settings.json');
+const VOICEVOX_SETTINGS_FILE = path.join(app.getPath('userData'), 'voicevox-settings.json');
 
 // Windowsで通知のアプリ名を設定（app.whenReady()の前に呼び出す必要がある）
 if (process.platform === 'win32') {
@@ -74,6 +85,9 @@ async function loadNotificationSettings() {
     if (notificationSettings.soundEnabled === undefined) {
       notificationSettings.soundEnabled = false;
     }
+    if (notificationSettings.voicevoxEnabled === undefined) {
+      notificationSettings.voicevoxEnabled = false;
+    }
     console.log('通知設定を読み込みました:', notificationSettings);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -81,7 +95,8 @@ async function loadNotificationSettings() {
       notificationSettings = {
         notificationEnabled: false,
         popupEnabled: false,
-        soundEnabled: false
+        soundEnabled: false,
+        voicevoxEnabled: false
       };
       // デフォルト設定は保存しない（ユーザーが明示的に設定した時だけ保存）
       console.log('通知設定ファイルが見つかりません。デフォルト設定（OFF）を使用します。');
@@ -90,7 +105,8 @@ async function loadNotificationSettings() {
       notificationSettings = {
         notificationEnabled: false,
         popupEnabled: false,
-        soundEnabled: false
+        soundEnabled: false,
+        voicevoxEnabled: false
       };
     }
   }
@@ -192,6 +208,36 @@ function createSettingsWindow() {
 }
 
 /**
+ * 読み上げ設定画面を作成
+ */
+function createVoicevoxSettingsWindow() {
+  if (voicevoxSettingsWindow) {
+    voicevoxSettingsWindow.focus();
+    return;
+  }
+
+  voicevoxSettingsWindow = new BrowserWindow({
+    width: 800,
+    height: 700,
+    parent: mainWindow,
+    modal: true,
+    icon: path.join(__dirname, 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true
+    }
+  });
+
+  voicevoxSettingsWindow.loadFile('voicevox-settings.html');
+
+  voicevoxSettingsWindow.on('closed', () => {
+    voicevoxSettingsWindow = null;
+  });
+}
+
+/**
  * APIレスポンスを監視して新しいスポットを検知
  */
 function setupApiMonitoring() {
@@ -278,6 +324,32 @@ async function processSpots(spots) {
         showNotification(spot);
         showPopupNotification(spot);
         await handleNotificationSound();
+        
+        // VOICEVOXで読み上げ
+        await speakWithVoicevox(
+          spot,
+          VOICEVOX_SETTINGS_FILE,
+          notificationSettings.voicevoxEnabled,
+          async (audioData, mimeType) => {
+            const targetWebContents = getAudioTargetWebContents();
+            if (targetWebContents) {
+              const dataUri = `data:${mimeType};base64,${audioData}`;
+              await targetWebContents.executeJavaScript(`
+                (() => {
+                  try {
+                    const audio = new Audio(${JSON.stringify(dataUri)});
+                    audio.volume = 1.0;
+                    audio.play().catch(error => {
+                      console.error('VOICEVOX音声再生エラー:', error);
+                    });
+                  } catch (error) {
+                    console.error('VOICEVOX音声再生エラー:', error);
+                  }
+                })()
+              `);
+            }
+          }
+        );
       }
     }
   }
@@ -550,6 +622,72 @@ function setupIpcHandlers() {
       return { success: false, error: error.message || '不明なエラーが発生しました。' };
     }
   });
+
+  // VOICEVOX設定の読み込み
+  ipcMain.handle('load-voicevox-settings', async () => {
+    return await loadVoicevoxSettings(VOICEVOX_SETTINGS_FILE);
+  });
+
+  // VOICEVOX設定の保存
+  ipcMain.handle('save-voicevox-settings', async (event, settings) => {
+    return await saveVoicevoxSettings(VOICEVOX_SETTINGS_FILE, settings);
+  });
+
+  // VOICEVOX話者一覧取得
+  ipcMain.handle('get-voicevox-speakers', async (event, hostname, port) => {
+    try {
+      return await getVoicevoxSpeakers(hostname, port);
+    } catch (error) {
+      console.error('話者一覧取得エラー:', error);
+      throw error;
+    }
+  });
+
+  // VOICEVOX音声合成
+  ipcMain.handle('synthesize-voicevox', async (event, hostname, port, speakerId, text, params) => {
+    try {
+      const result = await synthesizeVoicevox(hostname, port, speakerId, text, params);
+      
+      // 音声データを再生
+      if (result.success && result.audioData) {
+        const targetWebContents = getAudioTargetWebContents();
+        if (targetWebContents) {
+          const dataUri = `data:${result.mimeType};base64,${result.audioData}`;
+          await targetWebContents.executeJavaScript(`
+            (() => {
+              try {
+                const audio = new Audio(${JSON.stringify(dataUri)});
+                audio.volume = 1.0;
+                audio.play().catch(error => {
+                  console.error('VOICEVOX音声再生エラー:', error);
+                });
+              } catch (error) {
+                console.error('VOICEVOX音声再生エラー:', error);
+              }
+            })()
+          `);
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('音声合成エラー:', error);
+      return {
+        success: false,
+        error: error.message || '音声合成に失敗しました'
+      };
+    }
+  });
+
+  // VOICEVOX読み上げ文章生成
+  ipcMain.handle('generate-voicevox-text', async (event, spot, voicevoxSettings) => {
+    try {
+      return generateVoicevoxText(spot, voicevoxSettings);
+    } catch (error) {
+      console.error('読み上げ文章生成エラー:', error);
+      throw error;
+    }
+  });
 }
 
 /**
@@ -565,6 +703,12 @@ function createMenu() {
           accelerator: 'CmdOrCtrl+,',
           click: () => {
             createSettingsWindow();
+          }
+        },
+        {
+          label: '読み上げ設定',
+          click: () => {
+            createVoicevoxSettingsWindow();
           }
         },
         { type: 'separator' },
@@ -617,6 +761,15 @@ function createMenu() {
             notificationSettings.soundEnabled = menuItem.checked;
             await saveNotificationSettings(notificationSettings);
           }
+        },
+        {
+          label: '読み上げ機能',
+          type: 'checkbox',
+          checked: notificationSettings.voicevoxEnabled,
+          click: async (menuItem) => {
+            notificationSettings.voicevoxEnabled = menuItem.checked;
+            await saveNotificationSettings(notificationSettings);
+          }
         }
       ]
     },
@@ -654,6 +807,7 @@ function updateMenu() {
       const notificationItem = notificationMenu.submenu.items.find(item => item.label === '通知');
       const popupItem = notificationMenu.submenu.items.find(item => item.label === 'ポップアップ');
       const soundItem = notificationMenu.submenu.items.find(item => item.label === 'サウンド再生');
+      const voicevoxItem = notificationMenu.submenu.items.find(item => item.label === '読み上げ機能');
       if (notificationItem) {
         notificationItem.checked = notificationSettings.notificationEnabled;
       }
@@ -662,6 +816,9 @@ function updateMenu() {
       }
       if (soundItem) {
         soundItem.checked = notificationSettings.soundEnabled;
+      }
+      if (voicevoxItem) {
+        voicevoxItem.checked = notificationSettings.voicevoxEnabled;
       }
     }
   }

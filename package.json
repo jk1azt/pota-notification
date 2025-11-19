@@ -1,6 +1,6 @@
 {
-  "name": "pota-client-electron",
-  "version": "1.0.0",
+  "name": "pota-notification-electron",
+  "version": "1.1.0",
   "description": "POTA Notification - Desktop notification for POTA spots with filter",
   "main": "main.js",
   "scripts": {
