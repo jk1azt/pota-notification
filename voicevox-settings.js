@@ -32,7 +32,8 @@ async function loadSettings() {
         speed: 1.0,
         pitch: 0.0,
         intonation: 1.0,
-        breathing: 0.0
+        breathing: 0.0,
+        maxSpotsPerRead: 0
       };
     } else {
       // デフォルト値の設定
@@ -71,6 +72,9 @@ async function loadSettings() {
       }
       if (currentSettings.textTemplate === undefined) {
         currentSettings.textTemplate = '[reference] [frequency] [mode] [activator] [comments]';
+      }
+      if (currentSettings.maxSpotsPerRead === undefined) {
+        currentSettings.maxSpotsPerRead = 0;
       }
     }
     renderSettings();
@@ -139,6 +143,12 @@ function renderSettings() {
   updateSliderValue('param-pitch', currentSettings.pitch || 0.0);
   updateSliderValue('param-intonation', currentSettings.intonation || 1.0);
   updateSliderValue('param-breathing', currentSettings.breathing || 0.0);
+
+  // 読み上げ数制限を設定
+  const maxSpotsInput = document.getElementById('voicevox-max-spots');
+  if (maxSpotsInput) {
+    maxSpotsInput.value = currentSettings.maxSpotsPerRead !== undefined ? currentSettings.maxSpotsPerRead : 0;
+  }
 }
 
 /**
@@ -365,6 +375,8 @@ async function saveSettings() {
   const portableEnabled = document.getElementById('voicevox-portable').checked;
   const numberEnglishEnabled = document.getElementById('voicevox-number-english').checked;
   const textTemplate = document.getElementById('voicevox-template').value || '[reference] [frequency] [mode] [activator] [comments]';
+  const maxSpotsInput = document.getElementById('voicevox-max-spots');
+  const maxSpotsPerRead = maxSpotsInput ? (parseInt(maxSpotsInput.value, 10) || 0) : 0;
 
   currentSettings = {
     hostname: hostname,
@@ -378,7 +390,8 @@ async function saveSettings() {
     speed: parseFloat(document.getElementById('param-speed').value),
     pitch: parseFloat(document.getElementById('param-pitch').value),
     intonation: parseFloat(document.getElementById('param-intonation').value),
-    breathing: parseFloat(document.getElementById('param-breathing').value)
+    breathing: parseFloat(document.getElementById('param-breathing').value),
+    maxSpotsPerRead: maxSpotsPerRead < 0 ? 0 : maxSpotsPerRead
   };
 
   try {
