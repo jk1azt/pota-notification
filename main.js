@@ -8,7 +8,8 @@ const {
   getVoicevoxSpeakers,
   synthesizeVoicevox,
   speakWithVoicevox,
-  generateVoicevoxText
+  generateVoicevoxText,
+  speakMultipleSpotsWithVoicevox
 } = require('./voicevox');
 
 let mainWindow;
@@ -48,6 +49,14 @@ async function loadConfig() {
     if (filterConfig.notificationSoundPath === undefined) {
       filterConfig.notificationSoundPath = null;
     }
+    // 既存の設定にmaxNotificationCountがない場合は0を設定
+    if (filterConfig.maxNotificationCount === undefined) {
+      filterConfig.maxNotificationCount = 0;
+    }
+    // 既存の設定にmaxPopupCountがない場合は0を設定
+    if (filterConfig.maxPopupCount === undefined) {
+      filterConfig.maxPopupCount = 0;
+    }
     console.log('設定を読み込みました:', filterConfig);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -58,7 +67,9 @@ async function loadConfig() {
         mode: { conditions: [], operator: 'or' },
         frequency: { conditions: [], operator: 'or' },
         ignoreOtherSpotters: false,
-        notificationSoundPath: null
+        notificationSoundPath: null,
+        maxNotificationCount: 0,
+        maxPopupCount: 0
       };
       console.log('設定ファイルが見つかりません。デフォルト設定を使用します。');
     } else {
@@ -69,7 +80,9 @@ async function loadConfig() {
         mode: { conditions: [], operator: 'or' },
         frequency: { conditions: [], operator: 'or' },
         ignoreOtherSpotters: false,
-        notificationSoundPath: null
+        notificationSoundPath: null,
+        maxNotificationCount: 0,
+        maxPopupCount: 0
       };
     }
   }
@@ -311,6 +324,9 @@ async function processSpots(spots) {
     return;
   }
 
+  // フィルタを通過したスポットを配列に集約
+  const filteredSpots = [];
+
   for (const spot of spots) {
     const spotId = spot.spotId;
 
@@ -320,37 +336,48 @@ async function processSpots(spots) {
 
       // フィルタを適用
       if (filterConfig && applyFilter(spot, filterConfig)) {
-        // フィルタを通過した場合のみ通知
-        showNotification(spot);
-        showPopupNotification(spot);
-        await handleNotificationSound();
-        
-        // VOICEVOXで読み上げ
-        await speakWithVoicevox(
-          spot,
-          VOICEVOX_SETTINGS_FILE,
-          notificationSettings.voicevoxEnabled,
-          async (audioData, mimeType) => {
-            const targetWebContents = getAudioTargetWebContents();
-            if (targetWebContents) {
-              const dataUri = `data:${mimeType};base64,${audioData}`;
-              await targetWebContents.executeJavaScript(`
-                (() => {
-                  try {
-                    const audio = new Audio(${JSON.stringify(dataUri)});
-                    audio.volume = 1.0;
-                    audio.play().catch(error => {
-                      console.error('VOICEVOX音声再生エラー:', error);
-                    });
-                  } catch (error) {
-                    console.error('VOICEVOX音声再生エラー:', error);
-                  }
-                })()
-              `);
-            }
-          }
-        );
+        // フィルタを通過したスポットを配列に追加
+        filteredSpots.push(spot);
       }
+    }
+  }
+
+  // フィルタ後のスポットがある場合のみ処理
+  if (filteredSpots.length > 0) {
+    // 通知音を1回だけ再生
+    await handleNotificationSound();
+
+    // デスクトップ通知の最大件数制限を適用
+    const maxNotificationCount = filterConfig?.maxNotificationCount || 0;
+    const notificationSpots = maxNotificationCount > 0 
+      ? filteredSpots.slice(0, maxNotificationCount)
+      : filteredSpots;
+
+    // ポップアップ通知の最大件数制限を適用
+    const maxPopupCount = filterConfig?.maxPopupCount || 0;
+    const popupSpots = maxPopupCount > 0
+      ? filteredSpots.slice(0, maxPopupCount)
+      : filteredSpots;
+
+    // デスクトップ通知を表示
+    for (const spot of notificationSpots) {
+      showNotification(spot);
+    }
+
+    // ポップアップ通知を表示
+    for (const spot of popupSpots) {
+      showPopupNotification(spot);
+    }
+
+    // VOICEVOXで読み上げ（複数スポット対応）
+    const targetWebContents = getAudioTargetWebContents();
+    if (targetWebContents) {
+      await speakMultipleSpotsWithVoicevox(
+        filteredSpots,
+        VOICEVOX_SETTINGS_FILE,
+        notificationSettings.voicevoxEnabled,
+        targetWebContents
+      );
     }
   }
 

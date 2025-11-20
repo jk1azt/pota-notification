@@ -30,7 +30,8 @@ async function loadVoicevoxSettings(settingsFilePath) {
         speed: 1.0,
         pitch: 0.0,
         intonation: 1.0,
-        breathing: 0.0
+        breathing: 0.0,
+        maxSpotsPerRead: 0
       };
     } else {
       console.error('VOICEVOX設定の読み込みエラー:', error);
@@ -46,7 +47,8 @@ async function loadVoicevoxSettings(settingsFilePath) {
         speed: 1.0,
         pitch: 0.0,
         intonation: 1.0,
-        breathing: 0.0
+        breathing: 0.0,
+        maxSpotsPerRead: 0
       };
     }
   }
@@ -362,12 +364,88 @@ async function speakWithVoicevox(spot, settingsFilePath, voicevoxEnabled, playAu
   }
 }
 
+/**
+ * VOICEVOXで複数スポットを読み上げ（音声再生用のコールバック関数を受け取る）
+ * @param {Array} spots - スポットデータの配列
+ * @param {string} settingsFilePath - 設定ファイルのパス
+ * @param {boolean} voicevoxEnabled - VOICEVOX有効フラグ
+ * @param {Object} targetWebContents - 音声再生先のwebContents
+ */
+async function speakMultipleSpotsWithVoicevox(spots, settingsFilePath, voicevoxEnabled, targetWebContents) {
+  if (!voicevoxEnabled || !Array.isArray(spots) || spots.length === 0) {
+    return;
+  }
+
+  try {
+    const voicevoxSettings = await loadVoicevoxSettings(settingsFilePath);
+
+    if (!voicevoxSettings.speakerId) {
+      console.log('VOICEVOX: 話者が設定されていません');
+      return;
+    }
+
+    // 読み上げ数制限を適用
+    const maxSpotsPerRead = voicevoxSettings.maxSpotsPerRead || 0;
+    const spotsToRead = maxSpotsPerRead > 0
+      ? spots.slice(0, maxSpotsPerRead)
+      : spots;
+
+    // 各スポットを順次処理（同時再生を防止）
+    for (const spot of spotsToRead) {
+      const text = generateVoicevoxText(spot, voicevoxSettings);
+
+      const result = await synthesizeVoicevox(
+        voicevoxSettings.hostname,
+        voicevoxSettings.port,
+        voicevoxSettings.speakerId,
+        text,
+        {
+          volume: voicevoxSettings.volume,
+          speed: voicevoxSettings.speed,
+          pitch: voicevoxSettings.pitch,
+          intonation: voicevoxSettings.intonation,
+          breathing: voicevoxSettings.breathing
+        }
+      );
+
+      if (result.success && result.audioData && targetWebContents) {
+        // 音声データを再生
+        const dataUri = `data:${result.mimeType};base64,${result.audioData}`;
+        await targetWebContents.executeJavaScript(`
+          (() => {
+            return new Promise((resolve, reject) => {
+              try {
+                const audio = new Audio(${JSON.stringify(dataUri)});
+                audio.volume = 1.0;
+                audio.onended = () => resolve();
+                audio.onerror = (error) => reject(error);
+                audio.play().catch(error => {
+                  console.error('VOICEVOX音声再生エラー:', error);
+                  reject(error);
+                });
+              } catch (error) {
+                console.error('VOICEVOX音声再生エラー:', error);
+                reject(error);
+              }
+            });
+          })()
+        `);
+      } else if (!result.success) {
+        console.error('VOICEVOX読み上げエラー:', result.error);
+      }
+    }
+  } catch (error) {
+    console.error('VOICEVOX読み上げエラー:', error);
+  }
+}
+
 module.exports = {
   loadVoicevoxSettings,
   saveVoicevoxSettings,
   getVoicevoxSpeakers,
   synthesizeVoicevox,
   generateVoicevoxText,
-  speakWithVoicevox
+  speakWithVoicevox,
+  speakMultipleSpotsWithVoicevox
 };
 

@@ -26,7 +26,9 @@ async function loadSettings() {
       mode: { conditions: [], operator: 'or' },
       frequency: { conditions: [], operator: 'or' },
       ignoreOtherSpotters: false,
-      notificationSoundPath: null
+      notificationSoundPath: null,
+      maxNotificationCount: 0,
+      maxPopupCount: 0
     };
     } else {
       // 既存の設定にignoreOtherSpottersがない場合はfalseを設定
@@ -37,6 +39,14 @@ async function loadSettings() {
       if (currentConfig.notificationSoundPath === undefined) {
         currentConfig.notificationSoundPath = null;
       }
+      // 既存の設定にmaxNotificationCountがない場合は0を設定
+      if (currentConfig.maxNotificationCount === undefined) {
+        currentConfig.maxNotificationCount = 0;
+      }
+      // 既存の設定にmaxPopupCountがない場合は0を設定
+      if (currentConfig.maxPopupCount === undefined) {
+        currentConfig.maxPopupCount = 0;
+      }
     }
   } catch (error) {
     console.error('設定の読み込みエラー:', error);
@@ -46,7 +56,9 @@ async function loadSettings() {
       mode: { conditions: [], operator: 'or' },
       frequency: { conditions: [], operator: 'or' },
       ignoreOtherSpotters: false,
-      notificationSoundPath: null
+      notificationSoundPath: null,
+      maxNotificationCount: 0,
+      maxPopupCount: 0
     };
   }
 }
@@ -89,6 +101,17 @@ function renderSettings() {
   const notificationSoundPathInput = document.getElementById('notification-sound-path');
   if (notificationSoundPathInput) {
     notificationSoundPathInput.value = currentConfig.notificationSoundPath || '';
+  }
+
+  // 通知数制限を設定
+  const maxNotificationCountInput = document.getElementById('max-notification-count');
+  if (maxNotificationCountInput) {
+    maxNotificationCountInput.value = currentConfig.maxNotificationCount !== undefined ? currentConfig.maxNotificationCount : 0;
+  }
+
+  const maxPopupCountInput = document.getElementById('max-popup-count');
+  if (maxPopupCountInput) {
+    maxPopupCountInput.value = currentConfig.maxPopupCount !== undefined ? currentConfig.maxPopupCount : 0;
   }
 }
 
@@ -322,6 +345,19 @@ async function saveSettings() {
   const notificationSoundPathInput = document.getElementById('notification-sound-path');
   if (notificationSoundPathInput) {
     currentConfig.notificationSoundPath = notificationSoundPathInput.value || null;
+  }
+
+  // 通知数制限を取得
+  const maxNotificationCountInput = document.getElementById('max-notification-count');
+  if (maxNotificationCountInput) {
+    const value = parseInt(maxNotificationCountInput.value, 10);
+    currentConfig.maxNotificationCount = isNaN(value) || value < 0 ? 0 : value;
+  }
+
+  const maxPopupCountInput = document.getElementById('max-popup-count');
+  if (maxPopupCountInput) {
+    const value = parseInt(maxPopupCountInput.value, 10);
+    currentConfig.maxPopupCount = isNaN(value) || value < 0 ? 0 : value;
   }
 
   try {
